@@ -1,0 +1,55 @@
+name: Build Rissu NetHunter Kernel
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential bc bison flex libssl-dev libncurses5-dev git curl zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      - name: Setup Proton Clang
+        run: |
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+
+      - name: Apply NetHunter Patches
+        run: |
+          # Dito natin pilitin ang configs para hindi na siya mag-prompt ng "Restart config"
+          CONFIG=arch/arm64/configs/lineage_defconfig
+          sed -i 's/CONFIG_LTO_NONE=y/CONFIG_LTO_NONE=y/g' $CONFIG # Siguraduhin natin ang LTO settings
+          echo "CONFIG_USB_HIDDEV=y" >> $CONFIG
+          echo "CONFIG_USB_HID=y" >> $CONFIG
+          echo "CONFIG_WIRELESS=y" >> $CONFIG
+          echo "CONFIG_CFG80211=y" >> $CONFIG
+          echo "CONFIG_MAC80211=y" >> $CONFIG
+          echo "CONFIG_PACKET=y" >> $CONFIG
+
+      - name: Build Kernel
+        run: |
+          export ARCH=arm64
+          export PATH=$(pwd)/clang/bin:$PATH
+          
+          # Gamitin ang yes command para i-bypass ang mga tinatanong sa terminal (yung "Restart config")
+          yes "" | make lineage_defconfig
+          
+          # LLVM=1 ang magic word para gamitin ang lahat ng LLVM tools at iwasan ang '-EL' error
+          make -j$(nproc) \
+            LLVM=1 \
+            LLVM_IAS=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            KCFLAGS="-w" \
+            Image.gz
+
+      - name: Upload Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rissu-NetHunter-A10s
+          path: arch/arm64/boot/Image.gz
+          
