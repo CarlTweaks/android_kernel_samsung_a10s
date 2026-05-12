@@ -1,0 +1,66 @@
+name: Build Rissu NetHunter Kernel
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential bc bison flex libssl-dev libncurses5-dev git curl zip
+
+      - name: Setup Proton Clang
+        run: |
+          # Clang 13 based toolchain (Proton Clang)
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+
+      - name: Apply NetHunter Patches
+        run: |
+          # I-setup ang defconfig para sa NetHunter Full Package
+          CONFIG=arch/arm64/configs/lineage_defconfig
+          
+          # HID Support (BadUSB)
+          echo "CONFIG_USB_HIDDEV=y" >> $CONFIG
+          echo "CONFIG_USB_HID=y" >> $CONFIG
+          
+          # WiFi Injection & Packet Support
+          echo "CONFIG_WIRELESS=y" >> $CONFIG
+          echo "CONFIG_CFG80211=y" >> $CONFIG
+          echo "CONFIG_MAC80211=y" >> $CONFIG
+          echo "CONFIG_CFG80211_WEXT=y" >> $CONFIG
+          echo "CONFIG_PACKET=y" >> $CONFIG
+          
+          # Force enable HID Gadget
+          echo "CONFIG_USB_GADGET=y" >> $CONFIG
+          echo "CONFIG_USB_G_ANDROID=y" >> $CONFIG
+
+      - name: Build Kernel
+        run: |
+          export ARCH=arm64
+          export PATH=$(pwd)/clang/bin:$PATH
+          
+          # Ito ang magic command para sa Clang 11-13
+          make lineage_defconfig
+          make -j$(nproc) \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            KCFLAGS="-w" \
+            Image.gz
+
+      - name: Check and Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rissu-NetHunter-A10s
+          path: arch/arm64/boot/Image.gz
+          
