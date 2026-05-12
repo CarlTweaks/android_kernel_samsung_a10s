@@ -1,0 +1,46 @@
+name: Build Kernel Final Attempt
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential bc bison flex libssl-dev libncurses5-dev git curl zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      - name: Apply NetHunter Patches
+        run: |
+          CONFIG=arch/arm64/configs/lineage_defconfig
+          # Pilitin natin ang configs para iwas "Restart config" prompt
+          echo "CONFIG_USB_HIDDEV=y" >> $CONFIG
+          echo "CONFIG_USB_HID=y" >> $CONFIG
+          echo "CONFIG_WIRELESS=y" >> $CONFIG
+          echo "CONFIG_CFG80211=y" >> $CONFIG
+          echo "CONFIG_MAC80211=y" >> $CONFIG
+          echo "CONFIG_PACKET=y" >> $CONFIG
+
+      - name: Build Kernel
+        run: |
+          export ARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
+          
+          # 'make olddefconfig' ang pamatay sa interactive prompts
+          make lineage_defconfig
+          make olddefconfig
+          
+          # Heto ang huling luto
+          make -j$(nproc) KCFLAGS="-w" Image.gz
+
+      - name: Upload Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Final-NetHunter-Kernel
+          path: arch/arm64/boot/Image.gz
+          
