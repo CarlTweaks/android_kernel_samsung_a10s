@@ -1,0 +1,59 @@
+name: Build Rissu NetHunter Kernel
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: |
+          sudo apt update
+          # Idinagdag natin ang gcc-aarch64-linux-gnu at gcc-arm-linux-gnueabi
+          sudo apt install -y build-essential bc bison flex libssl-dev libncurses5-dev git curl zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      - name: Setup Proton Clang
+        run: |
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+
+      - name: Apply NetHunter Patches
+        run: |
+          CONFIG=arch/arm64/configs/lineage_defconfig
+          # NetHunter essential configs
+          echo "CONFIG_USB_HIDDEV=y" >> $CONFIG
+          echo "CONFIG_USB_HID=y" >> $CONFIG
+          echo "CONFIG_WIRELESS=y" >> $CONFIG
+          echo "CONFIG_CFG80211=y" >> $CONFIG
+          echo "CONFIG_MAC80211=y" >> $CONFIG
+          echo "CONFIG_PACKET=y" >> $CONFIG
+
+      - name: Build Kernel
+        run: |
+          export ARCH=arm64
+          # Idagdag ang Clang sa PATH
+          export PATH=$(pwd)/clang/bin:$PATH
+          
+          # Siguraduhin na mahanap ang CROSS_COMPILE
+          make lineage_defconfig
+          
+          make -j$(nproc) \
+            CC=clang \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            AR=llvm-ar \
+            NM=llvm-nm \
+            OBJCOPY=llvm-objcopy \
+            OBJDUMP=llvm-objdump \
+            STRIP=llvm-strip \
+            KCFLAGS="-w" \
+            Image.gz
+
+      - name: Upload Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rissu-NetHunter-A10s
+          path: arch/arm64/boot/Image.gz
+          
